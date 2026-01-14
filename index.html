@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Smart Car Emergency Detection System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Leaflet CSS (no integrity to avoid blocking issues) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+
+  <style>
+    :root {
+      --bg: #050710;
+      --bg-card: #111622;
+      --accent: #4caf50;
+      --accent-warning: #ffb300;
+      --accent-danger: #ff5252;
+      --text-main: #f5f5f5;
+      --text-muted: #9ea4b8;
+      --border-soft: #22273a;
+      --timer: #03a9f4;
+      --shadow: 0 14px 30px rgba(0, 0, 0, 0.5);
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --radius-sm: 6px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #1a2238, #050710 55%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .app {
+      max-width: 1200px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 2.2fr 1.5fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 1024px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: linear-gradient(145deg, #121726, #090d16);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-soft);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .card-title {
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .pill {
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border: 1px solid var(--border-soft);
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      margin-right: 6px;
+      display: inline-block;
+    }
+
+    .status-ok { background: var(--accent); }
+    .status-warn { background: var(--accent-warning); }
+    .status-crit { background: var(--accent-danger); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .metric {
+      background: radial-gradient(circle at top, #1e2940, #0b101b);
+      border-radius: var(--radius-md);
+      border: 1px solid #20263a;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+    }
+
+    .metric-value {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .metric-unit {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    .metric-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 10px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .badge-ok {
+      color: var(--accent);
+      background: rgba(76, 175, 80, 0.07);
+    }
+
+    .badge-warn {
+      color: var(--accent-warning);
+      background: rgba(255, 179, 0, 0.08);
+    }
+
+    .badge-crit {
+      color: var(--accent-danger);
+      background: rgba(255, 82, 82, 0.1);
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: #151925;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #03a9f4, #00e676);
+      width: 0%;
+      transition: width 0.3s ease-out;
+    }
+
+    .progress-fill.warning {
+      background: linear-gradient(90deg, #ffb300, #ff7043);
+    }
+
+    .progress-fill.danger {
+      background: linear-gradient(90deg, #ff5252, #ff1744);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .pill-small {
+      font-size: 11px;
+      padding: 4px 7px;
+      border-radius: 999px;
+      border: 1px solid #22263a;
+      color: var(--text-muted);
+      cursor: default;
+    }
+
+    .pill-small.active {
+      border-color: #00e676;
+      color: #00e676;
+      background: rgba(0, 230, 118, 0.08);
+    }
+
+    .pill-small.occupied {
+      border-color: #ffb300;
+      color: #ffb300;
+      background: rgba(255, 179, 0, 0.08);
+      cursor: pointer;
+    }
+
+    .pill-small.critical {
+      border-color: #ff5252;
+      color: #ff5252;
+      background: rgba(255, 82, 82, 0.09);
+    }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+    }
+
+    .switch-label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+    .switch input { display: none; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #252b3f;
+      transition: 0.3s;
+      border-radius: 999px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #00e676;
+    }
+    input:checked + .slider:before {
+      transform: translateX(17px);
+    }
+
+    .alert-panel {
+      background: radial-gradient(circle at top left, #2b1a21, #14070b 55%);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(255, 82, 82, 0.4);
+      padding: 16px;
+      box-shadow: 0 0 40px rgba(255, 82, 82, 0.4);
+      position: relative;
+      overflow: hidden;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .alert-panel.active {
+      display: flex;
+    }
+
+    .alert-severity {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .alert-heading {
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .alert-text {
+      font-size: 13px;
+      color: #ffcdd2;
+    }
+
+    .alert-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 11px;
+      color: #ffebee;
+    }
+
+    .timer-ring {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.15);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: auto;
+      background: radial-gradient(circle at top, #420717, #1b050b);
+    }
+
+    .timer-value {
+      font-size: 22px;
+      font-weight: 600;
+      color: #ffebee;
+    }
+
+    .timer-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #ffab91;
+      position: absolute;
+      bottom: 6px;
+    }
+
+    .alert-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 13px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+      box-shadow: none;
+    }
+
+    .btn-safe {
+      background: #00e676;
+      color: #001b07;
+      box-shadow: 0 8px 18px rgba(0, 230, 118, 0.35);
+    }
+
+    .btn-test {
+      background: #1e88e5;
+      color: #e3f2fd;
+      box-shadow: 0 8px 18px rgba(33, 150, 243, 0.35);
+    }
+
+    .btn-minor {
+      background: #ffb300;
+      color: #2a1500;
+      box-shadow: 0 8px 18px rgba(255, 179, 0, 0.35);
+    }
+
+    .btn-major {
+      background: #ff5252;
+      color: #ffebee;
+      box-shadow: 0 8px 18px rgba(255, 82, 82, 0.4);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid #343b52;
+    }
+
+    .contacts-list {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .contact-pill {
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px dashed #37405a;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .contact-pill button {
+      border: none;
+      background: transparent;
+      color: #ef9a9a;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0;
+    }
+
+    .log {
+      font-size: 11px;
+      color: var(--text-muted);
+      max-height: 150px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .log-entry {
+      padding: 3px 0;
+      border-bottom: 1px dashed #22263a;
+    }
+
+    .log-entry span {
+      color: #cfd8dc;
+    }
+
+    .danger-text { color: #ff5252; }
+    .accent-text { color: #00e676; }
+    .muted-text { color: var(--text-muted); }
+
+    .impact-preview {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .impact-preview span {
+      color: #e1f5fe;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #292f42;
+      border-radius: 999px;
+    }
+
+    /* Map */
+    #map {
+      width: 100%;
+      height: 230px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #20263a;
+      margin-top: 6px;
+    }
+
+    /* Call popup */
+    .call-popup {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      width: 260px;
+      background: #111626;
+      border-radius: 12px;
+      border: 1px solid #394567;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #e3f2fd;
+      display: none;
+      z-index: 999;
+    }
+
+    .call-popup.active {
+      display: block;
+    }
+
+    .call-popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .call-popup-title {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .call-popup-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #263238;
+      color: #b0bec5;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .call-popup-body {
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+
+    .call-popup-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .call-popup button {
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 11px;
+      border: none;
+      cursor: pointer;
+    }
+
+    .call-popup .btn-end {
+      background: #ef5350;
+      color: #ffebee;
+    }
+
+    .call-popup .btn-view {
+      background: transparent;
+      border: 1px solid #455a64;
+      color: #cfd8dc;
+    }
+
+    .contacts-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .contacts-form input {
+      flex: 1;
+      min-width: 0;
+      background: #050814;
+      border-radius: 999px;
+      border: 1px solid #283249;
+      padding: 5px 8px;
+      font-size: 11px;
+      color: #eceff1;
+    }
+
+    .contacts-form input::placeholder {
+      color: #5c6b7f;
+    }
+
+    .contacts-form button {
+      border-radius: 999px;
+      border: none;
+      padding: 5px 10px;
+      font-size: 11px;
+      background: #00e676;
+      color: #001b07;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Left: Dashboard + map -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Vehicle live status</div>
+          <div style="margin-top:4px;font-size:12px;color:var(--text-muted);">
+            Car ID: <span class="accent-text">PB-10-EM-204</span> • Connected
+          </div>
+        </div>
+        <div class="pill">
+          <span class="status-dot status-ok"></span>Monitoring ON
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Tire pressure -->
+        <div class="metric">
+          <div class="metric-label">Tire pressure (avg)</div>
+          <div class="metric-value">
+            <span id="tirePressureValue">34</span>
+            <span class="metric-unit">psi</span>
+          </div>
+          <div class="metric-badge badge-ok" id="tireBadge">OK</div>
+          <div class="progress-bar">
+            <div id="tireProgress" class="progress-fill"></div>
+          </div>
+          <div class="pill-row" style="margin-top:6px;">
+            <div class="pill-small" id="tireFL">FL: 34 psi</div>
+            <div class="pill-small" id="tireFR">FR: 34 psi</div>
+            <div class="pill-small" id="tireRL">RL: 34 psi</div>
+            <div class="pill-small" id="tireRR">RR: 34 psi</div>
+          </div>
+        </div>
+
+        <!-- Engine temp -->
+        <div class="metric">
+          <div class="metric-label">Engine temp</div>
+          <div class="metric-value">
+            <span id="engineTempValue">88</span>
+            <span class="metric-unit">°C</span>
+          </div>
+          <div class="metric-badge badge-ok" id="engineBadge">Normal</div>
+          <div class="progress-bar">
+            <div id="engineProgress" class="progress-fill"></div>
+          </div>
+          <div class="pill-row">
+            <div class="pill-small" id="engineStatus">Cooling OK</div>
+            <div class="pill-small">Oil OK</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="metric">
+          <div class="metric-label">Speed</div>
+          <div class="metric-value">
+            <span id="speedValue">52</span>
+            <span class="metric-unit">km/h</span>
+          </div>
+          <div class="progress-bar">
+            <div id="speedProgress" class="progress-fill"></div>
+          </div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Battery</div>
+          <div class="metric-value">
+            <span id="batteryValue">86</span>
+            <span class="metric-unit">%</span>
+          </div>
+          <div class="progress-bar">
+            <div id="batteryProgress" class="progress-fill"></div>
+          </div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Fuel</div>
+          <div class="metric-value">
+            <span id="fuelValue">54</span>
+            <span class="metric-unit">%</span>
+          </div>
+          <div class="progress-bar">
+            <div id="fuelProgress" class="progress-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Occupancy & safety -->
+      <div class="grid-2">
+        <div class="metric">
+          <div class="metric-label">Seat occupancy</div>
+          <div class="pill-row">
+            <div class="pill-small occupied" id="seatDriver">Driver</div>
+            <div class="pill-small occupied" id="seatPassenger">Front</div>
+            <div class="pill-small occupied" id="seatRearLeft">Rear L</div>
+            <div class="pill-small occupied" id="seatRearRight">Rear R</div>
+          </div>
+          <div class="switch-row">
+            <div class="switch-label">Mark all seats empty (vacant)</div>
+            <label class="switch">
+              <input type="checkbox" id="toggleVacant" />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="metric">
+          <div class="metric-label">Safety systems</div>
+          <div class="pill-row">
+            <div class="pill-small active" id="beltStatus">Seatbelts ON</div>
+            <div class="pill-small active" id="airbagStatus">Airbag armed</div>
+            <div class="pill-small" id="doorStatus">Doors locked</div>
+          </div>
+          <div class="switch-row">
+            <div class="switch-label">Simulate airbag deployment</div>
+            <label class="switch">
+              <input type="checkbox" id="simulateAirbag" />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Testing controls -->
+      <div class="card" style="margin-top:8px;padding:12px;background:rgba(7,13,26,0.9);">
+        <div class="card-header" style="margin-bottom:0;">
+          <div class="card-title">Testing & impact simulation</div>
+          <div class="pill">Developer mode</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
+          <button class="btn btn-minor" id="btnSimMinor">
+            Simulate minor collision
+          </button>
+          <button class="btn btn-major" id="btnSimMajor">
+            Simulate major collision
+          </button>
+          <button class="btn btn-test" id="btnTestAlarm">
+            Test alarm (no alerts)
+          </button>
+        </div>
+        <div class="impact-preview" style="margin-top:6px;">
+          g-force: <span id="gValue">0.2</span>g •
+          speed drop: <span id="speedDropValue">0</span> km/h •
+          airbag: <span id="airbagPreview">no</span>
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div class="metric" style="margin-top:10px;">
+        <div class="metric-label">GPS location</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">
+          Shows current car location. Alerts include this location for contacts and emergency services. [Simulated if geolocation is blocked]
+        </div>
+        <div id="map"></div>
+        <div style="margin-top:4px;font-size:11px;color:var(--text-muted);">
+          Lat: <span id="latDisplay">–</span>, Lng: <span id="lngDisplay">–</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Alerts & contacts -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Crash assistant & alerts</div>
+          <div style="margin-top:4px;font-size:12px;color:var(--text-muted);">
+            Configure emergency contacts & see recent events.
+          </div>
+        </div>
+        <div class="pill">
+          <span class="status-dot status-ok"></span>Ready
+        </div>
+      </div>
+
+      <!-- Active alert -->
+      <div class="alert-panel" id="alertPanel">
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <div>
+            <div class="alert-severity" id="alertSeverityLabel">Minor impact</div>
+            <div class="alert-heading" id="alertHeading">Are you okay?</div>
+            <div class="alert-text" id="alertText">
+              A minor impact was detected. If you are safe, tap “I’m safe”.
+              If you do not respond, your emergency contacts will be notified with your location.
+            </div>
+            <div class="alert-meta">
+              <div>Impact: <span id="alertImpactInfo">g=1.4, speed drop 18 km/h</span></div>
+              <div>Occupancy: <span id="alertOccupancyInfo">driver only</span></div>
+              <div>Location: <span id="alertLocationInfo">acquiring...</span></div>
+            </div>
+          </div>
+          <div class="timer-ring">
+            <div class="timer-value" id="timerValue">20</div>
+            <div class="timer-label">seconds</div>
+          </div>
+        </div>
+        <div class="alert-actions">
+          <button class="btn btn-safe" id="btnImSafe">I’m safe, cancel</button>
+          <button class="btn btn-outline" id="btnCallNow">
+            Call emergency services now
+          </button>
+        </div>
+      </div>
+
+      <!-- Contacts editable -->
+      <div class="metric" style="margin-top:10px;">
+        <div class="metric-label">Emergency contacts</div>
+        <div class="contacts-list" id="contactsList"></div>
+        <div class="contacts-form">
+          <input id="contactNameInput" placeholder="Name (e.g. Mom)" />
+          <input id="contactPhoneInput" placeholder="Phone (+91-...)" />
+          <button id="btnAddContact">Add</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+          Contacts are stored locally in this browser so you can change them anytime.
+        </div>
+      </div>
+
+      <!-- Event log -->
+      <div class="metric" style="margin-top:10px;flex:1;">
+        <div class="metric-label">Recent events</div>
+        <div class="log" id="eventLog"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Call popup -->
+  <div class="call-popup" id="callPopup">
+    <div class="call-popup-header">
+      <div>
+        <div class="call-popup-title" id="callPopupTitle">Calling...</div>
+        <div style="font-size:10px;color:#90a4ae;" id="callPopupSubtitle">
+          Sending SMS with location
+        </div>
+      </div>
+      <div class="call-popup-badge" id="callPopupBadge">Contacts</div>
+    </div>
+    <div class="call-popup-body" id="callPopupBody">–</div>
+    <div class="call-popup-actions">
+      <button class="btn-view" id="callPopupView">View log</button>
+      <button class="btn-end" id="callPopupEnd">Close</button>
+    </div>
+  </div>
+
+  <!-- Leaflet JS (no integrity; standard CDN pattern) -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+
+  <script>
+    // ===================== DOM refs ======================
+    const tirePressureValue = document.getElementById("tirePressureValue");
+    const tireProgress = document.getElementById("tireProgress");
+    const tireBadge = document.getElementById("tireBadge");
+    const tireFL = document.getElementById("tireFL");
+    const tireFR = document.getElementById("tireFR");
+    const tireRL = document.getElementById("tireRL");
+    const tireRR = document.getElementById("tireRR");
+
+    const engineTempValue = document.getElementById("engineTempValue");
+    const engineProgress = document.getElementById("engineProgress");
+    const engineBadge = document.getElementById("engineBadge");
+    const engineStatus = document.getElementById("engineStatus");
+
+    const speedValue = document.getElementById("speedValue");
+    const speedProgress = document.getElementById("speedProgress");
+    const batteryValue = document.getElementById("batteryValue");
+    const batteryProgress = document.getElementById("batteryProgress");
+    const fuelValue = document.getElementById("fuelValue");
+    const fuelProgress = document.getElementById("fuelProgress");
+
+    const seatDriver = document.getElementById("seatDriver");
+    const seatPassenger = document.getElementById("seatPassenger");
+    const seatRearLeft = document.getElementById("seatRearLeft");
+    const seatRearRight = document.getElementById("seatRearRight");
+    const toggleVacant = document.getElementById("toggleVacant");
+
+    const airbagStatus = document.getElementById("airbagStatus");
+    const doorStatus = document.getElementById("doorStatus");
+    const simulateAirbag = document.getElementById("simulateAirbag");
+
+    const btnSimMinor = document.getElementById("btnSimMinor");
+    const btnSimMajor = document.getElementById("btnSimMajor");
+    const btnTestAlarm = document.getElementById("btnTestAlarm");
+
+    const gValue = document.getElementById("gValue");
+    const speedDropValue = document.getElementById("speedDropValue");
+    const airbagPreview = document.getElementById("airbagPreview");
+
+    const alertPanel = document.getElementById("alertPanel");
+    const alertSeverityLabel = document.getElementById("alertSeverityLabel");
+    const alertHeading = document.getElementById("alertHeading");
+    const alertText = document.getElementById("alertText");
+    const alertImpactInfo = document.getElementById("alertImpactInfo");
+    const alertOccupancyInfo = document.getElementById("alertOccupancyInfo");
+    const alertLocationInfo = document.getElementById("alertLocationInfo");
+    const timerValue = document.getElementById("timerValue");
+    const btnImSafe = document.getElementById("btnImSafe");
+    const btnCallNow = document.getElementById("btnCallNow");
+    const eventLog = document.getElementById("eventLog");
+
+    const contactsList = document.getElementById("contactsList");
+    const contactNameInput = document.getElementById("contactNameInput");
+    const contactPhoneInput = document.getElementById("contactPhoneInput");
+    const btnAddContact = document.getElementById("btnAddContact");
+
+    const latDisplay = document.getElementById("latDisplay");
+    const lngDisplay = document.getElementById("lngDisplay");
+
+    const callPopup = document.getElementById("callPopup");
+    const callPopupTitle = document.getElementById("callPopupTitle");
+    const callPopupSubtitle = document.getElementById("callPopupSubtitle");
+    const callPopupBadge = document.getElementById("callPopupBadge");
+    const callPopupBody = document.getElementById("callPopupBody");
+    const callPopupView = document.getElementById("callPopupView");
+    const callPopupEnd = document.getElementById("callPopupEnd");
+
+    // ===================== Map & location ======================
+    // Standard Leaflet initialization. [web:17][web:49][web:54]
+    let map = L.map("map").setView([30.7046, 76.7179], 13);
+    let carMarker = L.marker([30.7046, 76.7179]).addTo(map)
+      .bindPopup("Car location");
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    let currentLocation = { lat: 30.7046, lng: 76.7179 };
+
+    function updateLocationOnMap(lat, lng) {
+      currentLocation.lat = lat;
+      currentLocation.lng = lng;
+      latDisplay.textContent = lat.toFixed(5);
+      lngDisplay.textContent = lng.toFixed(5);
+      carMarker.setLatLng([lat, lng]);
+      map.setView([lat, lng], 15);
+    }
+
+    // HTML5 geolocation with graceful fallback. [web:51][web:53][web:24]
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          updateLocationOnMap(pos.coords.latitude, pos.coords.longitude);
+        },
+        () => {
+          // keep default Mohali coords
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+
+    // ===================== Log helper ======================
+    function appendLog(message) {
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement("div");
+      entry.className = "log-entry";
+      entry.innerHTML = `<span>[${time}]</span> ${message}`;
+      eventLog.prepend(entry);
+    }
+
+    // ===================== Progress helper ======================
+    function setProgress(element, value, dangerThreshold, warnThreshold) {
+      const percent = Math.max(0, Math.min(100, value));
+      element.style.width = percent + "%";
+      element.classList.remove("warning", "danger");
+      if (percent >= dangerThreshold) {
+        element.classList.add("danger");
+      } else if (percent >= warnThreshold) {
+        element.classList.add("warning");
+      }
+    }
+
+    // ===================== Health simulation ======================
+    function simulateHealth() {
+      const basePressure = 33 + Math.sin(Date.now() / 12000) * 1.5;
+      const pressures = [
+        basePressure + (Math.random() - 0.5),
+        basePressure + (Math.random() - 0.5),
+        basePressure + (Math.random() - 0.5),
+        basePressure + (Math.random() - 0.5),
+      ];
+      const avgPressure =
+        pressures.reduce((a, b) => a + b, 0) / pressures.length;
+
+      tirePressureValue.textContent = avgPressure.toFixed(1);
+      tireFL.textContent = `FL: ${pressures[0].toFixed(1)} psi`;
+      tireFR.textContent = `FR: ${pressures[1].toFixed(1)} psi`;
+      tireRL.textContent = `RL: ${pressures[2].toFixed(1)} psi`;
+      tireRR.textContent = `RR: ${pressures[3].toFixed(1)} psi`;
+
+      const pressurePercent = ((avgPressure - 26) / (40 - 26)) * 100;
+      setProgress(tireProgress, pressurePercent, 90, 75);
+      if (avgPressure < 28 || avgPressure > 38) {
+        tireBadge.textContent = "Check";
+        tireBadge.className = "metric-badge badge-warn";
+      } else {
+        tireBadge.textContent = "OK";
+        tireBadge.className = "metric-badge badge-ok";
+      }
+
+      const engineTemp = 87 + Math.sin(Date.now() / 8000) * 6;
+      engineTempValue.textContent = engineTemp.toFixed(0);
+      const enginePercent = ((engineTemp - 70) / (110 - 70)) * 100;
+      setProgress(engineProgress, enginePercent, 80, 65);
+      if (engineTemp > 103) {
+        engineBadge.textContent = "Hot";
+        engineBadge.className = "metric-badge badge-crit";
+        engineStatus.textContent = "Overheat risk";
+        engineStatus.className = "pill-small critical";
+      } else if (engineTemp > 96) {
+        engineBadge.textContent = "Warm";
+        engineBadge.className = "metric-badge badge-warn";
+        engineStatus.textContent = "Fan active";
+        engineStatus.className = "pill-small occupied";
+      } else {
+        engineBadge.textContent = "Normal";
+        engineBadge.className = "metric-badge badge-ok";
+        engineStatus.textContent = "Cooling OK";
+        engineStatus.className = "pill-small active";
+      }
+
+      const speed = 35 + Math.sin(Date.now() / 10000) * 25;
+      speedValue.textContent = speed.toFixed(0);
+      setProgress(speedProgress, (speed / 160) * 100, 75, 55);
+
+      const battery = 80 + Math.sin(Date.now() / 30000) * 18;
+      batteryValue.textContent = battery.toFixed(0);
+      setProgress(batteryProgress, battery, 25, 45);
+
+      const fuel = 60 + Math.sin(Date.now() / 25000) * 22;
+      fuelValue.textContent = fuel.toFixed(0);
+      setProgress(fuelProgress, fuel, 20, 35);
+    }
+    setInterval(simulateHealth, 1500);
+    simulateHealth();
+
+    // ===================== Seat & airbag ======================
+    toggleVacant.addEventListener("change", () => {
+      const vacant = toggleVacant.checked;
+      const seats = [seatDriver, seatPassenger, seatRearLeft, seatRearRight];
+      seats.forEach((seat) => {
+        if (vacant) {
+          seat.classList.remove("occupied");
+        } else {
+          seat.classList.add("occupied");
+        }
+      });
+      appendLog(
+        vacant
+          ? "All seats marked empty (car vacant)."
+          : "All seats marked occupied."
+      );
+    });
+
+    simulateAirbag.addEventListener("change", () => {
+      if (simulateAirbag.checked) {
+        airbagStatus.textContent = "Airbag DEPLOYED";
+        airbagStatus.className = "pill-small critical";
+      } else {
+        airbagStatus.textContent = "Airbag armed";
+        airbagStatus.className = "pill-small active";
+      }
+      airbagPreview.textContent = simulateAirbag.checked ? "yes" : "no";
+    });
+
+    [seatPassenger, seatRearLeft, seatRearRight].forEach((seat) => {
+      seat.addEventListener("click", () => {
+        seat.classList.toggle("occupied");
+        appendLog(
+          `Seat toggled: ${seat.textContent.split(" ")[0]} • occupied=${seat.classList.contains(
+            "occupied"
+          )}`
+        );
+      });
+    });
+
+    // ===================== Web Audio alarm ======================
+    // Uses square-wave beeps as in Web Audio examples. [web:25][web:57]
+    let audioCtx = null;
+    let minorInterval = null;
+    let majorInterval = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) {
+          audioCtx = new Ctx();
+        }
+      }
+    }
+
+    function playBeep(freq, durationMs, volume) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.value = freq;
+      gain.gain.value = volume;
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+      osc.start(now);
+      osc.stop(now + durationMs / 1000);
+    }
+
+    function startMinorAlarmSound() {
+      initAudio();
+      stopAlarmSound();
+      minorInterval = setInterval(() => {
+        playBeep(900, 120, 0.18);
+      }, 350);
+    }
+
+    function startMajorAlarmSound() {
+      initAudio();
+      stopAlarmSound();
+      majorInterval = setInterval(() => {
+        playBeep(850, 180, 0.3);
+        setTimeout(() => playBeep(650, 180, 0.3), 200);
+      }, 700);
+    }
+
+    function stopAlarmSound() {
+      if (minorInterval) {
+        clearInterval(minorInterval);
+        minorInterval = null;
+      }
+      if (majorInterval) {
+        clearInterval(majorInterval);
+        majorInterval = null;
+      }
+    }
+
+    // ===================== Alert logic ======================
+    let countdownInterval = null;
+    let currentAlert = null;
+
+    function getOccupants() {
+      const occ = [];
+      if (seatDriver.classList.contains("occupied")) occ.push("driver");
+      if (seatPassenger.classList.contains("occupied")) occ.push("front");
+      if (seatRearLeft.classList.contains("occupied")) occ.push("rear left");
+      if (seatRearRight.classList.contains("occupied")) occ.push("rear right");
+      return occ;
+    }
+
+    function startAlert({ severity, gForce, speedDrop, testOnly }) {
+      if (currentAlert && currentAlert.active) {
+        clearInterval(countdownInterval);
+      }
+
+      const occupants = getOccupants();
+      const vacant = occupants.length === 0 || toggleVacant.checked;
+      const isMajor = severity === "major";
+
+      currentAlert = {
+        severity,
+        gForce,
+        speedDrop,
+        testOnly: !!testOnly,
+        occupants,
+        vacant,
+        timer: isMajor ? 25 : 20,
+        location: { ...currentLocation },
+        active: true
+      };
+
+      gValue.textContent = gForce.toFixed(1);
+      speedDropValue.textContent = speedDrop.toFixed(0);
+      airbagPreview.textContent = simulateAirbag.checked ? "yes" : "no";
+
+      alertPanel.classList.add("active");
+      timerValue.textContent = currentAlert.timer;
+
+      const locStr = `${currentLocation.lat.toFixed(
+        4
+      )}, ${currentLocation.lng.toFixed(4)}`;
+      alertLocationInfo.textContent = locStr;
+
+      if (severity === "minor") {
+        alertSeverityLabel.textContent = "Minor impact";
+        alertHeading.textContent = "Are you okay?";
+        alertText.textContent =
+          "A minor impact was detected. If everything is fine, tap “I’m safe”. Otherwise your emergency contacts will be notified together with your live location.";
+        alertPanel.style.borderColor = "rgba(255,179,0,0.6)";
+        alertPanel.style.boxShadow = "0 0 40px rgba(255,179,0,0.4)";
+        startMinorAlarmSound();
+      } else {
+        alertSeverityLabel.textContent = vacant
+          ? "Major impact (vacant)"
+          : "Major impact";
+        alertHeading.textContent = vacant
+          ? "Your parked car was hit"
+          : "Possible serious crash";
+        alertText.textContent = vacant
+          ? "A strong impact was detected while the car appears vacant. Contacts can be notified with the exact location so they can inspect the vehicle."
+          : "A strong impact was detected and the car is occupied. If you cannot respond in time, contacts and emergency services will be alerted with your location.";
+        alertPanel.style.borderColor = "rgba(255,82,82,0.8)";
+        alertPanel.style.boxShadow = "0 0 40px rgba(255,82,82,0.6)";
+        startMajorAlarmSound();
+      }
+
+      alertImpactInfo.textContent = `g=${gForce.toFixed(
+        1
+      )}, speed drop ${speedDrop.toFixed(0)} km/h`;
+      alertOccupancyInfo.textContent = vacant
+        ? "no occupants"
+        : occupants.join(", ");
+
+      appendLog(
+        `Impact detected: ${severity.toUpperCase()} • g=${gForce.toFixed(
+          1
+        )}, Δv=${speedDrop.toFixed(0)} km/h • vacant=${vacant} • location=${locStr}`
+      );
+
+      countdownInterval = setInterval(() => {
+        currentAlert.timer -= 1;
+        timerValue.textContent = currentAlert.timer;
+        if (currentAlert.timer <= 0) {
+          clearInterval(countdownInterval);
+          onAlertTimeout();
+        }
+      }, 1000);
+    }
+
+    function clearAlert(manualCancel) {
+      if (!currentAlert) return;
+      clearInterval(countdownInterval);
+      alertPanel.classList.remove("active");
+      stopAlarmSound();
+      if (manualCancel) {
+        appendLog(
+          `Alert cancelled by driver. Severity: ${currentAlert.severity.toUpperCase()}`
+        );
+      }
+      currentAlert.active = false;
+      currentAlert = null;
+    }
+
+    function showCallPopup({ type, message, locationUrl }) {
+      callPopupTitle.textContent =
+        type === "services" ? "Calling emergency services" : "Alerting contacts";
+      callPopupBadge.textContent =
+        type === "services" ? "Services" : "Contacts";
+      callPopupSubtitle.textContent =
+        type === "services"
+          ? "Sending crash details + GPS location"
+          : "Sending SMS/push with location";
+      callPopupBody.innerHTML =
+        message +
+        (locationUrl
+          ? `<br/><span style="color:#90caf9;">Location link:</span> <span style="word-break:break-all;">${locationUrl}</span>`
+          : "");
+      callPopup.classList.add("active");
+    }
+
+    function hideCallPopup() {
+      callPopup.classList.remove("active");
+    }
+
+    callPopupEnd.addEventListener("click", hideCallPopup);
+    callPopupView.addEventListener("click", () => {
+      eventLog.scrollIntoView({ behavior: "smooth" });
+    });
+
+    function onAlertTimeout() {
+      if (!currentAlert) return;
+      stopAlarmSound();
+
+      if (currentAlert.testOnly) {
+        appendLog("Test alarm finished (no alerts sent).");
+        clearAlert(false);
+        return;
+      }
+
+      const { severity, occupants, vacant, location } = currentAlert;
+      const locString = `${location.lat.toFixed(4)},${location.lng.toFixed(
+        4
+      )}`;
+      const mapsLink = `https://www.google.com/maps/search/?api=1&query=${locString}`;
+
+      appendLog(
+        `Timeout: ${severity} event – emergency contacts notified with location (${locString}).`
+      );
+      showCallPopup({
+        type: "contacts",
+        message: `Notifying saved contacts with impact details and location (${locString}).`,
+        locationUrl: mapsLink
+      });
+
+      if (severity === "major" && !vacant) {
+        appendLog(
+          "Timeout: major impact with occupants – emergency services alerted with crash details and GPS link."
+        );
+        showCallPopup({
+          type: "services",
+          message:
+            "Sending crash severity, occupancy and GPS coordinates to emergency services.",
+          locationUrl: mapsLink
+        });
+      } else if (severity === "major" && vacant) {
+        appendLog(
+          "Timeout: major impact but car marked vacant – contacts notified, services not auto-called."
+        );
+      }
+
+      clearAlert(false);
+    }
+
+    btnImSafe.addEventListener("click", () => {
+      clearAlert(true);
+      hideCallPopup();
+    });
+
+    btnCallNow.addEventListener("click", () => {
+      if (!currentAlert) return;
+      const locString = `${currentAlert.location.lat.toFixed(
+        4
+      )},${currentAlert.location.lng.toFixed(4)}`;
+      const mapsLink = `https://www.google.com/maps/search/?api=1&query=${locString}`;
+      appendLog(
+        "Driver requested immediate call to emergency services (simulated)."
+      );
+      showCallPopup({
+        type: "services",
+        message: `Calling emergency number and sending location (${locString}).`,
+        locationUrl: mapsLink
+      });
+      clearAlert(false);
+      alert("Dialing emergency number (simulated)...");
+    });
+
+    // ===================== Test buttons ======================
+    btnSimMinor.addEventListener("click", () => {
+      startAlert({
+        severity: "minor",
+        gForce: 1.4 + Math.random() * 0.4,
+        speedDrop: 15 + Math.random() * 6,
+      });
+    });
+
+    btnSimMajor.addEventListener("click", () => {
+      startAlert({
+        severity: "major",
+        gForce: 2.8 + Math.random() * 0.7,
+        speedDrop: 30 + Math.random() * 15,
+      });
+    });
+
+    btnTestAlarm.addEventListener("click", () => {
+      startAlert({
+        severity: "minor",
+        gForce: 1.0,
+        speedDrop: 8,
+        testOnly: true,
+      });
+    });
+
+    // ===================== Contacts (localStorage) ======================
+    const CONTACTS_KEY = "smart_car_emergency_contacts";
+
+    function loadContacts() {
+      try {
+        const raw = localStorage.getItem(CONTACTS_KEY);
+        if (!raw) {
+          return [
+            { name: "Mom", phone: "+91-98765-00001" },
+            { name: "Dad", phone: "+91-98765-00002" },
+            { name: "Friend", phone: "+91-98765-00003" },
+          ];
+        }
+        return JSON.parse(raw);
+      } catch {
+        return [];
+      }
+    }
+
+    function saveContacts(list) {
+      localStorage.setItem(CONTACTS_KEY, JSON.stringify(list));
+    }
+
+    let contacts = loadContacts();
+    renderContacts();
+
+    function renderContacts() {
+      contactsList.innerHTML = "";
+      contacts.forEach((c, idx) => {
+        const pill = document.createElement("div");
+        pill.className = "contact-pill";
+        pill.innerHTML = `${c.name} • ${c.phone} <button data-idx="${idx}">×</button>`;
+        contactsList.appendChild(pill);
+      });
+
+      contactsList.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const index = parseInt(btn.getAttribute("data-idx"), 10);
+          contacts.splice(index, 1);
+          saveContacts(contacts);
+          renderContacts();
+        });
+      });
+    }
+
+    btnAddContact.addEventListener("click", () => {
+      const name = contactNameInput.value.trim();
+      const phone = contactPhoneInput.value.trim();
+      if (!name || !phone) return;
+      contacts.push({ name, phone });
+      saveContacts(contacts);
+      renderContacts();
+      contactNameInput.value = "";
+      contactPhoneInput.value = "";
+    });
+
+    // Door status randomize just to show changes
+    setInterval(() => {
+      const locked = Math.random() > 0.3;
+      doorStatus.textContent = locked ? "Doors locked" : "Doors unlocked";
+      doorStatus.className = locked ? "pill-small active" : "pill-small";
+    }, 10000);
+  </script>
+</body>
+</html>
